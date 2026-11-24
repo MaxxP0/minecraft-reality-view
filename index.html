@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesla's reality view for Minecraft</title>
+<meta name="description" content="A model that only gets what a Minecraft player saw draws the place from straight above. How I think Tesla's reality view works, what I tried, and the small version that works.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Trying to implement Tesla's reality view for Minecraft">
+<meta property="og:description" content="A model that only gets what a Minecraft player saw draws the place from straight above.">
+<meta property="og:image" content="https://maxxp0.github.io/minecraft-reality-view/img/turn_inputs_new_card.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='6' fill='%234f9a3a'/%3E%3Crect y='6' width='16' height='10' fill='%237a5236'/%3E%3Crect x='3' y='6' width='3' height='3' fill='%234f9a3a'/%3E%3Crect x='10' y='6' width='2' height='2' fill='%234f9a3a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Layout: one left axis. Text runs in a 41rem column; figures start on the same axis and run out to 68rem. */
+:root {
+  --bg: #fbfcfa; --surface: #f0f3ee; --ink: #151a17; --muted: #5c6862; --rule: #d7ded8; --accent: #2f7a2a;
+  --video: #2f63c9; --pose: #b9770f; --target: #6d5fb5;
+  --display: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --body: "Source Serif 4", Charter, "Iowan Old Style", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --col: 41rem; --wide: 68rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1311; --surface: #171d1a; --ink: #e8eee9; --muted: #9aa7a0; --rule: #2a332e; --accent: #8ed071;
+          --video: #86a9ff; --pose: #f0b455; --target: #b6aaf2; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 1.1875rem; line-height: 1.62;
+       padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.page { max-width: var(--wide); margin-inline: auto; padding-block: clamp(2rem, 6vw, 5rem) 4rem; }
+.col { max-width: var(--col); }
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+.eyebrow, .spec, figcaption, .labels, th, .k { font-family: var(--mono); }
+.eyebrow { font-size: 0.78rem; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 1.4rem; }
+.eyebrow a { color: inherit; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2.3rem, 6.2vw, 4.1rem); line-height: 1.02; letter-spacing: -0.025em;
+     margin: 0; max-width: 16ch; text-wrap: balance; }
+.dek { font-size: clamp(1.2rem, 2.4vw, 1.45rem); line-height: 1.45; color: var(--muted); margin: 1.5rem 0 0; max-width: 36rem; }
+.spec { display: flex; flex-wrap: wrap; gap: 0.45rem 1.6rem; margin: 2rem 0 0; padding: 0; list-style: none; font-size: 0.8rem; color: var(--muted); }
+.spec b { color: var(--ink); font-weight: 600; }
+
+h2 { font-family: var(--display); font-weight: 700; font-size: 1.65rem; line-height: 1.15; letter-spacing: -0.012em;
+     margin: 4.2rem 0 1.1rem; max-width: var(--col); text-wrap: balance; }
+h2::before { content: ""; display: block; width: 0.7rem; height: 0.7rem; background: var(--accent); margin-bottom: 0.9rem; }
+p, ul, ol, dl { margin: 0 0 1.15rem; max-width: var(--col); }
+ul, ol { padding-left: 1.25rem; }
+li { margin-bottom: 0.45rem; }
+strong { font-weight: 600; }
+
+figure { margin: 2.6rem 0; }
+figure img { display: block; width: 100%; height: auto; }
+figure.mid { max-width: 38rem; }
+figure.hero { margin-top: clamp(2.4rem, 5vw, 3.6rem); }
+figcaption { font-size: 0.78rem; line-height: 1.55; color: var(--muted); margin-top: 0.85rem; max-width: var(--col); }
+.labels { display: grid; grid-template-columns: 1024fr 256fr 256fr; column-gap: 0.643%; font-size: clamp(0.58rem, 1.35vw, 0.74rem);
+          letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; line-height: 1.3; }
+.labels span { min-width: 0; }
+.labels .out { color: var(--accent); }
+.arch { overflow-x: auto; }
+.arch img { min-width: 44rem; }
+
+.parts { display: grid; grid-template-columns: max-content 1fr; gap: 0.55rem 1.4rem; margin: 1.4rem 0 1.6rem; }
+.parts dt { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); padding-top: 0.3rem; }
+.parts dd { margin: 0; }
+@media (max-width: 34rem) { .parts { grid-template-columns: 1fr; gap: 0.1rem; } .parts dd { margin-bottom: 0.7rem; } }
+
+.tablewrap { overflow-x: auto; max-width: var(--col); margin: 1.7rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: 1rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+     padding: 0 1.2rem 0.6rem 0; border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+td { padding: 0.62rem 1.2rem 0.62rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th:last-child, td:last-child { padding-right: 0; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.model td { font-weight: 600; }
+
+footer { margin-top: 5rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <p class="eyebrow"><a href="https://github.com/MaxxP0">MaxxP0</a> · November 2026</p>
+  <h1>Trying to implement Tesla's reality view for Minecraft</h1>
+  <p class="dek">A model that only gets what a Minecraft player saw has to draw the place from straight above. A small version of it works.</p>
+  <ul class="spec">
+    <li><b>134M</b> parameters</li>
+    <li><b>128 × 128</b> px</li>
+    <li><b>100 min</b> on one H100</li>
+    <li><b>3.8M</b> training samples, none seen twice</li>
+  </ul>
+</header>
+
+<figure class="hero">
+  <div class="labels" aria-hidden="true"><span>Input: the 16 frames of one turn</span><span>Target</span><span class="out">Output</span></div>
+  <img src="img/turn_inputs_new.png" width="1556" height="1054" alt="Four places. For each: sixteen first-person frames of a player turning once on the spot, the true top-down view, and the top-down view the model drew.">
+  <figcaption>Four places the model has never seen. Its input is the 16 frames of the player turning once on the spot. On the right, the true view from straight above and what the model drew.</figcaption>
+</figure>
+
+<main>
+<div class="col">
+<p>Tesla's "reality view" shows the scene around the car from a camera that does not exist: a third-person view, drawn by a generative model from what the car's own cameras saw. After AI Day I implemented a Tesla-like <a href="https://github.com/MaxxP0/occupancy_model">occupancy network for Minecraft</a>, so it felt natural to try this one as well. A Minecraft player looks around, and a model that only gets the player's own frames has to draw the scene from somewhere else.</p>
+<p>The short version: a small version works. The player turns once, and the model draws the view from straight above, for places it has never seen, after 100 minutes of training on one H100. The full version, with a camera anywhere around a walking player, is still open.</p>
+</div>
+
+<h2>How I think Tesla does it</h2>
+<p>From <a href="https://x.com/elonmusk/status/2124458557525397780">a post by Elon Musk</a> and posts by Tesla staff the rough layout is known:</p>
+<dl class="parts">
+  <dt>encoder</dt><dd>a universal vision encoder, trained on a large dataset</dd>
+  <dt>driving</dt><dd>a driving model that predicts the next actions, which does not matter for the live view</dd>
+  <dt>live view</dt><dd>a decoder, described as a mean-flow model with about one billion parameters</dd>
+</dl>
+<p>Two questions are open.</p>
+<ul>
+  <li><strong>What does the mean-flow model predict?</strong> Either it is told where the camera should be and generates that view directly, or it generates a full Gaussian splat that the UI then renders.</li>
+  <li><strong>What data is it trained on?</strong></li>
+</ul>
+
+<h2>First guess: predict the Gaussians</h2>
+<p>I started with the second reading: fit Gaussian splats to Minecraft terrain, then train a model that produces the Gaussians around the player from the player's cameras.</p>
+
+<figure class="mid">
+  <img src="img/gaussian_prediction.png" width="768" height="768" alt="Two examples. Six input camera views on top; below them the ground truth, the fitted Gaussian splat and the Gaussians predicted by the model, which are hazier.">
+  <figcaption>Top of each block: the six input cameras. Below: ground truth, the fitted splat, and the Gaussians the model predicted.</figcaption>
+</figure>
+
+<p>It gets the layout right, but it is inefficient, and the reason is the tokens. Image models can use large patches because image patches compress extremely well. A block of Gaussians in a voxel grid does not:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Token</th><th class="n">Values</th><th class="n">Dimensions needed for 95% of the variance</th></tr></thead>
+  <tbody>
+    <tr><td>Image patch, 16 × 16 px</td><td class="n">768</td><td class="n">1.6%</td></tr>
+    <tr><td>Cube of 4 × 4 × 4 Gaussians</td><td class="n">832</td><td class="n">60%</td></tr>
+    <tr><td>Random noise, for comparison</td><td class="n">832</td><td class="n">93%</td></tr>
+  </tbody>
+</table></div>
+<p>So the tokens have to stay small, and a volume needs a lot of them. A box only 19 blocks wide around the player was already 1,152 tokens, where a whole 192 px picture is 144. The volume grows with every block of range; a picture costs the same however far it sees. On top of that the output can never be better than the splats it was trained on: the model reached 19.1 dB against a ceiling of 26.0 dB.</p>
+
+<h2>Where the training data probably comes from</h2>
+<p>My guess is that Tesla uses Gaussian splats for the targets, not for the output. A splat fitted offline has hindsight. It is built from the whole drive, including the frames recorded later, so it can label backwards in time: it already knows what is around the corner the car has not reached yet. Rendered from a third-person camera, it is the picture the live model should have drawn at that moment.</p>
+<p>I could have done the same. I fitted splats to my own world, and any view of a splat can serve as a training target. I chose not to, because I would have had to fit a lot of them: a single 256 × 256 block map is about 1.8 million Gaussians, and fitting 11 of its 16 tiles took about two H100-hours. Minecraft also does not need it. The world can be rendered from any camera directly, so the targets are exact and free.</p>
+
+<h2>The model</h2>
+<p>The model is a pixel-space diffusion transformer in the style of JiT (<a href="https://arxiv.org/abs/2511.13720">Back to Basics: Let Denoising Generative Models Denoise</a>): 16 px patches, no VAE, and the network predicts the clean picture.</p>
+
+<figure>
+  <div class="arch">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="img/architecture-dark.svg">
+    <img src="img/architecture-light.svg" width="1080" height="664" alt="The model. The input video, the target camera and the noised target picture are each turned into tokens and concatenated into one sequence of 321 tokens. A transformer of 12 self-attention blocks processes the sequence, and the 64 target positions are read out as the clean picture. For sampling this repeats for 16 steps, starting from pure noise.">
+  </picture>
+  </div>
+  <figcaption>Three inputs become tokens and are joined into one sequence. The transformer sees all of it at once; only the target positions are read out. Sampling repeats this 16 times, starting from pure noise.</figcaption>
+</figure>
+
+<p>I skipped the encoder. In Tesla's stack the vision encoder is shared with the driving model. Here it would have no other downstream use, and pure pixel patches are cleaner. The input video is cut into patches of 4 frames × 16 × 16 px and embedded by one linear layer. Those video tokens, one token that says where the target camera is, and the noised patches of the target picture form one sequence, and the rest is plain self-attention.</p>
+
+<h2>Many views: tried, still open</h2>
+<p>I tried the full version first: a player walking through the world and a target camera at a random position behind and above. With the compute I had, it did not come together. The model followed the camera on walks it had memorised, and on new walks it drew a plausible place instead of the right one.</p>
+<p>If you think about it, every possible camera position is something the model has to learn. One fixed target position cuts that down a lot and trains much faster. So I went for one view first and left many views for another time, with more compute.</p>
+
+<h2>One view: turn around, draw the map</h2>
+<p>The player stands still and turns once, 16 frames in total. The target is the view straight down from 6 blocks above. Every training step uses new places, so the model never sees the same picture twice.</p>
+
+<figure>
+  <img src="img/turn_task.png" width="1536" height="576" alt="Three places. Four first-person frames looking left, ahead, right and behind, next to top-down views of the same place from four heights.">
+  <figcaption>Left: four of the 16 input frames (looking left, ahead, right, behind). Right: the view from 2, 3, 4 and 6 blocks above; the target is the last one.</figcaption>
+</figure>
+
+<p>One thing was needed to make it learn. Trained on the top-down view alone, the model picked up each place's colours and nothing about its layout. What fixed it was easy targets: three quarters of the training targets sit on a path from the player's current view up to the top-down camera. At the start of that path the target is the current view itself, which only needs copying, and from there the camera rises and tips over step by step.</p>
+<p>The result, after 100 minutes on one H100:</p>
+
+<figure>
+  <div class="labels" aria-hidden="true"><span>Input: the 16 frames of one turn</span><span>Target</span><span class="out">Output</span></div>
+  <img src="img/turn_inputs_held.png" width="1556" height="1054" alt="Four more places, on maps the model never trained on: the sixteen input frames, the true top-down view and the model's output.">
+  <figcaption>Four places on maps the model never trained on.</figcaption>
+</figure>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Places the model never saw</th><th class="n">Maps it trained on</th><th class="n">Maps it never trained on</th></tr></thead>
+  <tbody>
+    <tr class="model"><td>Model</td><td class="n">23.45 dB</td><td class="n">24.36 dB</td></tr>
+    <tr><td>A flat picture in the right colour</td><td class="n">20.27 dB</td><td class="n">21.96 dB</td></tr>
+    <tr><td>Loss when the input video is turned by 90°</td><td class="n">5.01 dB</td><td class="n">4.02 dB</td></tr>
+  </tbody>
+</table></div>
+
+<p>The last row is the check that it really reads the layout: the same frames fed in a quarter turn off have the same colours and objects, and the picture gets clearly worse.</p>
+<p>Grass, dirt, stone, water, sand and leaves end up where they are in the truth. The samples are softer than the real thing and their outlines are rounder. A bit over 40% of the top-down picture cannot be seen by a player standing on the ground, so that part has to be invented, which is the reason this is a job for a generative model.</p>
+
+<figure>
+  <img src="img/turn_h100_samples.png" width="2084" height="1060" alt="Sixteen pairs of top-down pictures. In each pair the true view is on the left and the model's sample on the right.">
+  <figcaption>16 more unseen places. In each pair the truth is on the left and the model's sample on the right.</figcaption>
+</figure>
+
+<p>The scores were still rising when the run stopped.</p>
+
+<h2>Next</h2>
+<ul>
+  <li>many views again, with more compute</li>
+  <li>one-step generation, as a mean-flow model would do it, in place of the 16-step sampler</li>
+  <li>real game frames in place of my own renderer</li>
+</ul>
+</main>
+
+<footer>
+  <a href="https://github.com/MaxxP0/minecraft-reality-view">github.com/MaxxP0/minecraft-reality-view</a>
+</footer>
+
+</div>
+</body>
+</html>
