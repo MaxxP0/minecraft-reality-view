@@ -126,14 +126,11 @@ footer a { color: inherit; }
   <dt>driving</dt><dd>a driving model that predicts the next actions, which does not matter for the live view</dd>
   <dt>live view</dt><dd>a decoder, described as a mean-flow model with about one billion parameters</dd>
 </dl>
-<p>Two questions are open.</p>
-<ul>
-  <li><strong>What does the mean-flow model predict?</strong> Either it is told where the camera should be and generates that view directly, or it generates a full Gaussian splat that the UI then renders.</li>
-  <li><strong>What data is it trained on?</strong></li>
-</ul>
+<p>The post also says what the decoder produces. It takes its own previous output with noise added and denoises it straight to the current picture, a short chunk of video frames at screen resolution. As I read it, no Gaussian splat is rendered in the car.</p>
+<p>One question stays open: what data is it trained on?</p>
 
 <h2>First guess: predict the Gaussians</h2>
-<p>I started with the second reading: fit Gaussian splats to Minecraft terrain, then train a model that produces the Gaussians around the player from the player's cameras.</p>
+<p>Before that post, my guess was that the car generates a Gaussian splat and the UI renders it. So that is where I started: fit Gaussian splats to Minecraft terrain, then train a model that produces the Gaussians around the player from the player's cameras.</p>
 
 <figure class="mid">
   <img src="img/gaussian_prediction.png" width="768" height="768" alt="Two examples. Six input camera views on top; below them the ground truth, the fitted Gaussian splat and the Gaussians predicted by the model, which are hazier.">
